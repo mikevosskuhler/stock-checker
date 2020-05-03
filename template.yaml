@@ -1,0 +1,39 @@
+Transform: AWS::Serverless-2016-10-31
+Description: check stock levels of e-commerce websites
+
+Resources:
+  initatechecker:
+    Type: AWS::Serverless::Function
+    Properties:
+        Handler: initate_checker.handler
+        CodeUri: code/
+        Runtime: python3.8
+        Role: !GetAtt writerole.Arn
+        Environment:
+          Variables:
+            queue_url: !Ref bucketqueue
+        Timeout: 60
+        MemorySize: 1024
+        Events:
+          Schedule:
+              Type: Schedule
+              Properties:
+                  Description: Daily trigger for key-checker lambda
+                  Enabled: True
+                  Name: bucketchecktrigger2
+                  Schedule: 'cron(0 18 * * ? *)'
+        Tracing: Active
+
+  checkstock:
+    Type: AWS::Serverless::Function
+    Properties:
+        Handler: check_stock.handler
+        CodeUri: code/
+        Runtime: python3.8
+        Role: !GetAtt writerole.Arn
+        Environment:
+          Variables:
+            queue_url: !Ref bucketqueue
+        Timeout: 60
+        MemorySize: 1024
+        Tracing: Active
