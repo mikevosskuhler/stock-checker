@@ -2,6 +2,28 @@ Transform: AWS::Serverless-2016-10-31
 Description: check stock levels of e-commerce websites
 
 Resources:
+
+  products: 
+    Type: AWS::DynamoDB::Table
+    Properties: 
+      AttributeDefinitions: 
+        - 
+          AttributeName: "category"
+          AttributeType: "S"
+        - 
+          AttributeName: "product"
+          AttributeType: "S"
+        - 
+          AttributeName: "url"
+          AttributeType: "S"
+      KeySchema: 
+        - 
+          AttributeName: "category"
+          KeyType: "HASH"
+        - 
+          AttributeName: "product"
+          KeyType: "RANGE"
+
   initatechecker:
     Type: AWS::Serverless::Function
     Properties:
@@ -12,7 +34,7 @@ Resources:
         Environment:
           Variables:
             queue_url: !Ref productqueue
-            dynamodb: webcrawler_products
+            dynamodb: !Ref products
         Timeout: 60
         MemorySize: 1024
         Events:
