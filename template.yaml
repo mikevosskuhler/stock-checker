@@ -8,7 +8,7 @@ Resources:
         Handler: initate_checker.handler
         CodeUri: code/
         Runtime: python3.8
-        Role: !GetAtt writerole.Arn
+        Role: !GetAtt initiaterole.Arn
         Environment:
           Variables:
             queue_url: !Ref bucketqueue
@@ -18,11 +18,61 @@ Resources:
           Schedule:
               Type: Schedule
               Properties:
-                  Description: Daily trigger for key-checker lambda
+                  Description: 12 hourly schedule for stock checking
                   Enabled: True
                   Name: bucketchecktrigger2
                   Schedule: 'cron(0 18 * * ? *)'
         Tracing: Active
+  
+  initiaterole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - 
+            Effect: "Allow"
+            Principal: 
+              Service: 
+                - "lambda.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      Description: Execution role for the initate_checker lambda
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXrayWriteOnlyAccess
+      Policies:
+        - PolicyName: initiatepolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - 
+              Action:
+              - sqs:SendMessage
+              Effect: Allow
+              Resource: 
+                Fn::GetAtt: 
+                  - "productqueue"
+                  - "Arn"
+            - 
+              Action:
+              - dynamodb:Scan
+              Effect: Allow
+              Resource: "*"
+
+  productqueue: 
+    Type: AWS::SQS::Queue
+    Properties: 
+      RedrivePolicy: 
+        deadLetterTargetArn: 
+          Fn::GetAtt: 
+            - "deadproductqueue"
+            - "Arn"
+        maxReceiveCount: 5
+      VisibilityTimeout: 65
+
+  deadproductqueue: 
+    Type: AWS::SQS::Queue
 
   checkstock:
     Type: AWS::Serverless::Function
@@ -33,7 +83,113 @@ Resources:
         Role: !GetAtt writerole.Arn
         Environment:
           Variables:
-            queue_url: !Ref bucketqueue
+            queue_url: !Ref productqueue
         Timeout: 60
         MemorySize: 1024
         Tracing: Active
+  
+  checkerrole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - 
+            Effect: "Allow"
+            Principal: 
+              Service: 
+                - "lambda.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      Description: Execution role for the initate_checker lambda
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXrayWriteOnlyAccess
+      Policies:
+        - PolicyName: checkerpolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - 
+              Action:
+              - sqs:DeleteMessage
+              - sqs:DeleteMessageBatch
+              - sqs:GetQueueAttributes
+              - sqs:ReceiveMessage              
+              Effect: Allow
+              Resource: 
+                Fn::GetAtt: 
+                  - "productqueue"
+                  - "Arn"
+            - 
+              Action:
+              - firehose:PutRecord
+              Effect: Allow
+              Resource: 
+                Fn::GetAtt: 
+                  - "deliverystream"
+                  - "Arn"
+                
+  deliverystream:
+    DependsOn:
+      - deliveryPolicy
+    Type: AWS::KinesisFirehose::DeliveryStream
+    Properties:
+      ExtendedS3DestinationConfiguration:
+        BucketARN: !Join 
+          - ''
+          - - 'arn:aws:s3:::'
+            - !Ref resultsbucket
+        BufferingHints:
+          IntervalInSeconds: '60'
+          SizeInMBs: '50'
+        CompressionFormat: UNCOMPRESSED
+        Prefix: firehose/
+        RoleARN: !GetAtt deliveryRole.Arn
+
+  resultsbucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      VersioningConfiguration:
+        Status: Enabled
+  deliveryRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: ''
+            Effect: Allow
+            Principal:
+              Service: firehose.amazonaws.com
+            Action: 'sts:AssumeRole'
+            Condition:
+              StringEquals:
+                'sts:ExternalId': !Ref 'AWS::AccountId'
+  deliveryPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: firehose_delivery_policy
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - 's3:AbortMultipartUpload'
+              - 's3:GetBucketLocation'
+              - 's3:GetObject'
+              - 's3:ListBucket'
+              - 's3:ListBucketMultipartUploads'
+              - 's3:PutObject'
+            Resource:
+              - !Join 
+                - ''
+                - - 'arn:aws:s3:::'
+                  - !Ref resultsbucket
+              - !Join 
+                - ''
+                - - 'arn:aws:s3:::'
+                  - !Ref resultsbucket
+                  - '*'
+      Roles:
+        - !Ref deliveryRole

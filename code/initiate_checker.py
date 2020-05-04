@@ -3,10 +3,11 @@ import boto3
 import json
 from boto3.dynamodb.types import TypeDeserializer
 
+client = boto3.client('dynamodb')
+
+# TODO: Grab queue url and dynamotable from the template; Code cleanup
 
 def lambda_handler(event, context):
-    
-    client = boto3.client('dynamodb')
     scan=client.scan(TableName='webcrawler_products')
     products = scan['Items']
     
