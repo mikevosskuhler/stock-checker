@@ -80,7 +80,7 @@ Resources:
     Properties:
         Handler: check_stock.handler
         CodeUri: code/
-        Runtime: python3.8
+        Runtime: python3.6
         Role: !GetAtt writerole.Arn
         Environment:
           Variables:
@@ -97,6 +97,18 @@ Resources:
                   - "productqueue"
                   - "Arn"
               BatchSize: 1
+        Layers:
+        - !Ref requests
+  
+  requests:
+      Type: AWS::Serverless::LayerVersion
+      Properties:
+          LayerName: selenium
+          Description: Selenium layer, needed for webcrawling
+          ContentUri: layers/selenium.zip
+          CompatibleRuntimes:
+              - python3.6
+          RetentionPolicy: Retain
   
   checkerrole:
     Type: "AWS::IAM::Role"
