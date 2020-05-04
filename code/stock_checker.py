@@ -7,6 +7,9 @@ import boto3
 import re 
 import os
 
+# TODO: Grab the firehose name from the template; code cleanup
+# TODO: Handle multiple events in a single execution run; delete each message after a succesfull execution
+
 def lambda_handler(event, context):
     
     body = event['Records'][0]['body']

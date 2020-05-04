@@ -11,7 +11,8 @@ Resources:
         Role: !GetAtt initiaterole.Arn
         Environment:
           Variables:
-            queue_url: !Ref bucketqueue
+            queue_url: !Ref productqueue
+            dynamodb: webcrawler_products
         Timeout: 60
         MemorySize: 1024
         Events:
@@ -87,6 +88,15 @@ Resources:
         Timeout: 60
         MemorySize: 1024
         Tracing: Active
+        Events:
+          SQSEvent:
+            Type: SQS
+            Properties:
+              Queue: 
+                Fn::GetAtt: 
+                  - "productqueue"
+                  - "Arn"
+              BatchSize: 1
   
   checkerrole:
     Type: "AWS::IAM::Role"
